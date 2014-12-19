@@ -5,8 +5,9 @@
 This is an example project setup for building iOS and Mac apps using the
 command line and your favorite text editor, no Xcode required. This is
 possible with a simple, minimalist `Rakefile` and a couple of command line
-tools. This allows you to completely control your development environment
-from top to bottom. No more messing around with buggy and bloated IDE's.
+tools. This allows you to completely *understand* and *control* your
+development environment from top to bottom. No more messing around with
+buggy and bloated IDE's.
 
 TODO: document motivation and how to get started.
 
