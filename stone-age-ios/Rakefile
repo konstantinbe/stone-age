@@ -1,0 +1,531 @@
+# Released under the MIT license.
+#
+# Copyright (c) 2014 Konstantin Bender.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+require 'rubygems'
+
+# ------------------------------------------------------------- Constants ------
+
+URL = ENV['url'] || "http://stone-age-app.com"
+NAME = ENV['name'] || "Stone Age"
+TITLE = ENV['title'] || "Stone Age for iOS"
+TARGET = ENV['target'] || "test"
+VERSION = ENV['version'] || '0.0.0-delta.0'
+DIRECTORY = ENV['directory'] || "Build"
+IDENTITY = ENV['identity'] || `git config signing.identity`.strip
+RELEASE_NOTES = ENV['release-notes'] || ""
+RELEASE_NOTES_TEXT = ENV['release-notes-text'] || "Improvements and bug fixes."
+HOCKEY_API_TOKEN = ENV['hockey-api-token'] || `git config hockey.api-token`.strip
+VAULT_REPO = ENV['vault-repo'] || `git config remote.origin.url`.strip.gsub("-ios.git", "-vault.git")
+SIMULATOR = ENV['simulator'] || "iPhone-4s"
+DEVICE = ENV['device'] || ""
+
+iOS = ENV['ios'] || '8.1'
+SIM = ENV['sim'] || '8.1'
+
+SDK_iOS = "iphoneos#{iOS}"
+SDK_SIM = "iphonesimulator#{SIM}"
+
+SYMBOLS = {"alpha" => "α", "beta" => "β", "delta" => "δ"}
+DATE = `date -u "+%Y-%m-%dT%H:%M:%SZ"`.strip
+
+FLAGS = "-g -std=gnu99 -fobjc-arc -IComponents -I#{DIRECTORY} -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-missing-braces"
+FLAGS_iOS = "-arch armv7 -arch armv7s -arch arm64 -miphoneos-version-min=#{iOS}"
+FLAGS_SIM = "-arch i386 -arch x86_64 -mios-simulator-version-min=#{SIM}"
+FLAGS_TEST = "-DTEST=1 -O0"
+FLAGS_DEBUG = "-DDEBUG=1 -O0"
+FLAGS_RELEASE ="-DRELEASE=1 -Os"
+FLAGS_PROFILE = "#{FLAGS_DEBUG} -fprofile-arcs -ftest-coverage"
+FLAGS_ANALYZE = "#{FLAGS_DEBUG} --analyze"
+
+HOCKEY_APP_ID = "" if VERSION.match '-alpha.' # TODO: add hockey app version
+HOCKEY_APP_ID = "" if VERSION.match '-beta.' # TODO: add hockey app version
+HOCKEY_APP_ID = "" unless defined? HOCKEY_APP_ID # TODO: add hockey app version
+
+FLAGS_TARGET = FLAGS_TEST if TARGET == "test"
+FLAGS_TARGET = FLAGS_DEBUG if TARGET == "debug"
+FLAGS_TARGET = FLAGS_RELEASE if TARGET == "release"
+FLAGS_TARGET = FLAGS_PROFILE if TARGET == "profile"
+FLAGS_TARGET = FLAGS_ANALYZE if TARGET == "analyze"
+FLAGS_TARGET = "" unless defined? FLAGS_TARGET
+
+VERSION_PARTS = VERSION.match /(\d+)\.(\d+)\.(\d+)(:?-(\w+)\.(\d+))?/
+VERSION_MAJOR = VERSION_PARTS[1].to_s
+VERSION_MINOR = VERSION_PARTS[2].to_s
+VERSION_PATCH = VERSION_PARTS[3].to_s
+VERSION_TAG = VERSION_PARTS[5].to_s
+VERSION_TAG_PATCH = VERSION_PARTS[6].to_s
+
+TAG_GIVEN = VERSION_TAG.length > 0
+TAG_DASHED = VERSION_TAG
+TAG_SPACED = TAG_DASHED.split("-").each { |s| s.capitalize! }.join(" ")
+TAG_CAMEL = TAG_DASHED.split("-").each { |s| s.capitalize! }.join("")
+
+NAME_CAMEL = NAME.gsub /\s*/, ""
+NAME_DASHED = NAME_CAMEL.downcase # TODO: implement camel to dashed.
+NAME_AND_TAG_DASHED = if TAG_GIVEN then "#{NAME_DASHED}-#{TAG_DASHED}" else NAME_DASHED end
+NAME_AND_TAG_CAMEL = NAME_CAMEL + TAG_CAMEL
+
+HUMAN_TAG = SYMBOLS[TAG_DASHED] || TAG_SPACED
+HUMAN_NAME_AND_TAG = if TAG_GIVEN then "#{NAME} #{HUMAN_TAG}" else NAME end
+HUMAN_TITLE_AND_TAG = if TAG_GIVEN then "#{TITLE} (#{HUMAN_TAG})" else TITLE end
+HUMAN_VERSION = if TAG_GIVEN then "#{VERSION_MAJOR}.#{VERSION_MINOR}.#{VERSION_PATCH} #{TAG_SPACED} #{VERSION_TAG_PATCH}" else VERSION end
+HUMAN_DATE = `date -u "+%A, %B %-d, %Y"`.strip
+
+BUNDLE = NAME_AND_TAG_CAMEL
+BUNDLE_ID = "com.stone-age-app.#{NAME_AND_TAG_DASHED}"
+
+RELEASE_NOTES_NAME = "release-notes" unless TAG_GIVEN
+RELEASE_NOTES_NAME = "release-notes-#{TAG_DASHED}" if TAG_GIVEN
+
+SIMULATOR_TYPE = "com.apple.CoreSimulator.SimDeviceType.#{SIMULATOR}, #{SIM}"
+
+# ---------------------------------------------------------------- Colors ------
+
+TERMINAL = STDOUT.tty?
+
+BOLD = TERMINAL ? "\x1B[0;1m" : ""
+BLACK = TERMINAL ? "\x1B[0;30m" : ""
+RED = TERMINAL ? "\x1B[0;31m" : ""
+GREEN = TERMINAL ? "\x1B[0;32m" : ""
+YELLOW = TERMINAL ? "\x1B[0;33m" : ""
+BLUE = TERMINAL ? "\x1B[0;34m" : ""
+MAGENTA = TERMINAL ? "\x1B[0;35m" : ""
+CYAN = TERMINAL ? "\x1B[0;36m" : ""
+WHITE = TERMINAL ? "\x1B[0;37m" : ""
+
+BLACK_BRIGHT = TERMINAL ? "\x1B[1;30m" : ""
+RED_BRIGHT = TERMINAL ? "\x1B[1;31m" : ""
+GREEN_BRIGHT = TERMINAL ? "\x1B[1;32m" : ""
+YELLOW_BRIGHT = TERMINAL ? "\x1B[1;33m" : ""
+BLUE_BRIGHT = TERMINAL ? "\x1B[1;34m" : ""
+MAGENTA_BRIGHT = TERMINAL ? "\x1B[1;35m" : ""
+CYAN_BRIGHT = TERMINAL ? "\x1B[1;36m" : ""
+WHITE_BRIGHT = TERMINAL ? "\x1B[1;37m" : ""
+
+RESET = TERMINAL ? "\x1B[0m" : ""
+
+OK = GREEN + "OK" + RESET
+FAILED = RED + "FAILED" + RESET
+
+# ----------------------------------------------------------------- Tasks ------
+
+task :default => :play
+
+desc "Show help"
+task :help => :prepare do
+  puts "\nSupported #{BLUE}options:#{RESET}"
+  puts "    * #{BOLD}name#{RESET}                     default: #{BOLD + NAME + RESET}"
+  puts "    * #{BOLD}title#{RESET}                    default: #{BOLD + TITLE + RESET}"
+  puts "    * #{BOLD}target#{RESET}                   default: #{BOLD + TARGET + RESET}"
+  puts "    * #{BOLD}version#{RESET}                  default: #{BOLD + VERSION + RESET}"
+  puts "    * #{BOLD}identity#{RESET}                 default: #{BOLD + IDENTITY + RESET}"
+  puts "    * #{BOLD}directory#{RESET}                default: #{BOLD + DIRECTORY + RESET}"
+  puts "    * #{BOLD}release-notes#{RESET}            default: #{BOLD + RELEASE_NOTES + RESET}"
+  puts "    * #{BOLD}release-notes-text#{RESET}       default: #{BOLD + RELEASE_NOTES_TEXT + RESET}"
+  puts "    * #{BOLD}hockey-api-token#{RESET}         default: #{BOLD + HOCKEY_API_TOKEN + RESET}"
+  puts "    * #{BOLD}vault-repo#{RESET}               default: #{BOLD + VAULT_REPO + RESET}"
+  puts "    * #{BOLD}simulator#{RESET}                default: #{BOLD + SIMULATOR + RESET}"
+  puts "    * #{BOLD}device#{RESET}                   default: #{BOLD + DEVICE + RESET}"
+  puts "    * #{BOLD}ios#{RESET}                      default: #{BOLD + iOS + RESET}"
+  puts "    * #{BOLD}sim#{RESET}                      default: #{BOLD + SIM + RESET}"
+
+  puts "\nSupported #{BLUE}simulators:#{RESET}"
+  puts "    Couldn't find any simulator\n" if simulators.length == 0
+  simulators.each do |simulator|
+    puts "    * #{BOLD + simulator + RESET}"
+  end
+
+  puts "\nAttached #{BLUE}devices:#{RESET}"
+  puts "    Couldn't find any device\n" if devices.length == 0
+  devices.each_pair do |name, key|
+    puts "    * #{BOLD + name + RESET}"
+  end
+
+  puts "\n"
+end
+
+desc "build source & app"
+task :build => ['build:source', 'build:app'] do
+  # Nothing to do yet.
+end
+
+desc "build components"
+task 'build:components' do
+  components = `ls -1 Components`.split "\n"
+  components.each do |component|
+    header_files = FileList["Components/#{component}/*.h"]
+    source_files = FileList["Components/#{component}/*.m", "Components/#{component}/*.c"]
+
+    run "mkdir -p #{DIRECTORY}/Components/#{component}"
+    run "rm -Rf #{DIRECTORY}/Components/#{component}/*.a"
+
+    put "Compiling #{component} ... "
+    source_files.each do |source_file|
+      source = source_file
+      sources = [source_file] + header_files
+      destination = "#{DIRECTORY}/" + source_file.gsub('.m', '')
+      run "xcrun --sdk #{SDK_iOS} clang #{FLAGS} #{FLAGS_iOS} #{FLAGS_TARGET} -c -o #{destination}@iOS.o #{source}" unless uptodate? "#{destination}@iOS.o", sources
+      run "xcrun --sdk #{SDK_SIM} clang #{FLAGS} #{FLAGS_SIM} #{FLAGS_TARGET} -c -o #{destination}@SIM.o #{source}" unless uptodate? "#{destination}@SIM.o", sources
+    end
+    puts OK
+  end
+end
+
+desc "build source"
+task 'build:source' => 'build:components' do
+  header_files = FileList["Source/*.h"]
+  source_files = FileList["Source/*.m"]
+
+  run "mkdir -p #{DIRECTORY}/Source"
+  run "rm -Rf #{DIRECTORY}/Source/*.a"
+
+  put "Compiling source ... "
+  source_files.each do |source_file|
+    source = source_file
+    sources = [source_file] + header_files
+    destination = "#{DIRECTORY}/" + source_file.gsub('.m', '')
+    run "xcrun --sdk #{SDK_iOS} clang #{FLAGS} #{FLAGS_iOS} #{FLAGS_TARGET} -c -o #{destination}@iOS.o #{source}" unless uptodate? "#{destination}@iOS.o", sources
+    run "xcrun --sdk #{SDK_SIM} clang #{FLAGS} #{FLAGS_SIM} #{FLAGS_TARGET} -c -o #{destination}@SIM.o #{source}" unless uptodate? "#{destination}@SIM.o", sources
+  end
+  puts OK
+end
+
+desc "build app"
+task 'build:app' => ['build:source'] do
+  put "Preparing app ... "
+  run "rm -rf #{DIRECTORY}/#{BUNDLE}.app"
+  run "mkdir -p #{DIRECTORY}/#{BUNDLE}.app/"
+  run "xcrun --sdk #{SDK_iOS} clang #{FLAGS} #{FLAGS_iOS} #{FLAGS_TARGET} -all_load -framework UIKit -framework QuartzCore -framework WebKit -framework JavaScriptCore -o #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}@iOS #{DIRECTORY}/Components/*/*@iOS.o #{DIRECTORY}/Source/*@iOS.o"
+  run "xcrun --sdk #{SDK_SIM} clang #{FLAGS} #{FLAGS_SIM} #{FLAGS_TARGET} -all_load -framework UIKit -framework QuartzCore -framework WebKit -framework JavaScriptCore -o #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}@SIM #{DIRECTORY}/Components/*/*@SIM.o #{DIRECTORY}/Source/*@SIM.o"
+  run "lipo -create #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}@* -output #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}"
+  run "rm #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}@iOS"
+  run "rm #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}@SIM"
+  run "chmod +x #{DIRECTORY}/#{BUNDLE}.app/#{BUNDLE}"
+  puts OK
+
+  put "Copying resources ... "
+  run "cp -Rf Resources/* Components/*/*.png Components/*/*.pdf Components/*/*.tiff #{DIRECTORY}/#{BUNDLE}.app/ 2> /dev/null", :survive => true
+  puts OK
+
+  put "Copying icons ... (not implemented yet) "
+  # TODO: implement.
+  # run "cp Assets/Icon#{TAG_CAMEL}.icns #{DIRECTORY}/#{BUNDLE}.app/Contents/Resources/"
+  puts OK
+
+  put "Generating Info.plist ... "
+  info_plist = load "Assets/Info.plist"
+  info_plist.gsub! "{bundle}", BUNDLE
+  info_plist.gsub! "{bundle-id}", BUNDLE_ID
+  info_plist.gsub! "{version}", VERSION
+  info_plist.gsub! "{version-human}", HUMAN_VERSION
+  info_plist.gsub! "{minimum-os-version}", iOS
+  info_plist.gsub! "{hockey-app-id}", HOCKEY_APP_ID
+  save "#{DIRECTORY}/#{BUNDLE}.app/Info.plist", info_plist
+  puts OK
+
+  put "Generating InfoPlist.strings ... "
+  info_plist_strings = load "Assets/InfoPlist.strings"
+  info_plist_strings.gsub! "{name-human}", HUMAN_NAME_AND_TAG
+  save "#{DIRECTORY}/#{BUNDLE}.app/InfoPlist.strings", info_plist_strings
+  puts OK
+
+  put "Copying other assets ... "
+  push "Assets/ResourceRules.plist", "#{DIRECTORY}/#{BUNDLE}.app/"
+  push "Assets/embedded.mobileprovision", "#{DIRECTORY}/#{BUNDLE}.app/"
+  push "Assets/PkgInfo", "#{DIRECTORY}/#{BUNDLE}.app/"
+  puts OK
+
+  put "Signing #{BOLD + IDENTITY + RESET} ... "
+  run "codesign --force --entitlements Resources/Entitlements.plist --sign '#{IDENTITY}' #{DIRECTORY}/#{BUNDLE}.app"
+  puts OK
+end
+
+desc "build & run app in simulator"
+task :play do
+  run "rake build target=debug directory=#{DIRECTORY}/Play"
+
+  put "Simulating app on #{BOLD + SIMULATOR + RESET} ... "
+  run "ios-sim launch #{DIRECTORY}/Play/#{BUNDLE}.app --devicetypeid '#{SIMULATOR_TYPE}'"
+  puts OK
+end
+
+desc "build & debug app in simulator"
+task :debug do
+  run "rake build target=debug directory=#{DIRECTORY}/Debug"
+
+  put "Simulating app on #{BOLD + SIMULATOR + RESET} ... "
+  run "ios-sim launch #{DIRECTORY}/Debug/#{BUNDLE}.app --devicetypeid '#{SIMULATOR_TYPE}' --debug"
+  puts OK
+end
+
+desc "build & run app on device"
+task :run do
+  run "rake build target=debug directory=#{DIRECTORY}/Run"
+
+  ids_by_name = devices
+  name = ids_by_name.keys.detect { |name| name.downcase.include? DEVICE.downcase }
+  id = ids_by_name[name]
+  put "Installing app on #{BOLD + name + RESET} ... "
+  run "ios-deploy --id #{id} --bundle #{DIRECTORY}/Run/#{BUNDLE}.app > #{DIRECTORY}/Run/ios-deploy.log"
+  puts OK
+end
+
+desc "build & analyze"
+task :analyze do
+  put "Preparing analysis ... "
+  run "rm -rf #{DIRECTORY}/Analyze"
+  puts OK
+
+  run "rake build:source target=analyze directory=#{DIRECTORY}/Analyze"
+end
+
+desc "release a version"
+task :release do
+  assert (not dirty?) || dry?, "#{RED}Error#{RESET}: repo is #{BOLD}dirty#{RESET} (only a dry-run possible)"
+  assert gem?('kramdown'), "#{RED}Error#{RESET}: gem #{BOLD + 'cramdown' + RESET} is not available (required for rendering release notes)"
+  assert connected? || dry?, "#{RED}Error#{RESET}: no internet #{BOLD}connection#{RESET} (only a dry run possible)"
+
+  require 'kramdown'
+
+  put "Preparing release #{BLUE + TITLE + RESET} #{BOLD + VERSION + RESET} ... "
+  run "rm -rf #{DIRECTORY}/Release"
+  run "mkdir -p #{DIRECTORY}/Release"
+  puts OK
+
+  put "Preparing package ... "
+  run "rm -Rf #{DIRECTORY}/Release/Package"
+  run "mkdir -p #{DIRECTORY}/Release/Package"
+  puts OK
+
+  put "Preparing website ... "
+  run "rm -Rf #{DIRECTORY}/Release/Website"
+  run "git clone --quiet --local --branch website .git #{DIRECTORY}/Release/Website"
+  run "cd #{DIRECTORY}/Release/Website; git clean -fdx"
+  puts OK
+
+  run "rake build target=release directory='#{DIRECTORY}/Release' version='#{VERSION}'"
+
+  put "Copying app bundle ... "
+  run "cp -Rf #{DIRECTORY}/Release/#{BUNDLE}.app #{DIRECTORY}/Release/Package/#{BUNDLE}.app"
+  puts OK
+
+  put "Generating ReadMe.md ... "
+  read_me = "# Release Package | #{TITLE}\n\nThis is a release package containing #{TITLE}, version `#{VERSION}`."
+  save "#{DIRECTORY}/Release/Package/ReadMe.md", read_me
+  puts OK
+
+  # put "Adding Hockey ... "
+  # run "cp -Rf Frameworks/HockeySDK.framework #{DIRECTORY}/Release/Package/#{BUNDLE}.app/Contents/Frameworks/"
+  # run "cp -Rf Frameworks/HockeySDK.framework.dSYM #{DIRECTORY}/Release/Package/"
+  # puts OK
+
+  put "Stripping debug symbols ... "
+  run "dsymutil #{DIRECTORY}/Release/Package/#{BUNDLE}.app/#{BUNDLE} -o #{DIRECTORY}/Release/Package/#{BUNDLE}.dSYM"
+  puts OK
+
+  put "Zipping app bundle ... "
+  run "cd #{DIRECTORY}/Release/Package/; zip --quiet --recurse-paths --symlinks ../Website/#{BUNDLE}.zip #{BUNDLE}.app"
+  puts OK
+
+  unless dry? || RELEASE_NOTES.length == 0
+    answer = ask %{No release notes file given, proceed with "#{MAGENTA}#{RELEASE_NOTES_TEXT}#{RESET}"?}
+    exit 1 if answer == 'n'
+  end
+
+  unless File.exists? "#{DIRECTORY}/Release/Website/#{RELEASE_NOTES_NAME}.html"
+    answer = ask "No release notes for tag #{BOLD + TAG_DASHED + RESET} exist on website yet, proceed and create new?"
+    exit 1 if answer == 'n'
+    release_notes_html = load "Assets/ReleaseNotesTemplate.html"
+    release_notes_html.gsub! "{title}", HUMAN_TITLE_AND_TAG
+    save "#{DIRECTORY}/Release/Website/#{RELEASE_NOTES_NAME}.html", release_notes_html
+  end
+
+  put "Updating release notes ... "
+  release_notes_md = if File.exists? RELEASE_NOTES then load RELEASE_NOTES else RELEASE_NOTES_TEXT end
+  release_notes_content = Kramdown::Document.new(release_notes_md).to_html
+  release_notes_html_path = "#{DIRECTORY}/Release/Website/#{RELEASE_NOTES_NAME}.html"
+  release_notes_html = load release_notes_html_path
+  release_notes_html.gsub! "</h1>\n", %{</h1>\n\n<section class="release">\n<h2 class="version">#{HUMAN_VERSION}</h2>\n<h3 class="date">Released on #{HUMAN_DATE}</h3>\n} + release_notes_content + %{</section>\n\n}
+  save "#{DIRECTORY}/Release/Package/ReleaseNotes.md", release_notes_md
+  save release_notes_html_path, release_notes_html
+  if release_notes_html.scan(/<h2 class="version">#{HUMAN_VERSION}<\/h2>/).count > 1
+    result = ask "\n#{YELLOW}Warning#{RESET}: release notes has duplicate entries for #{BOLD + HUMAN_VERSION + RESET}, please fix manually by editing file #{BOLD}#{release_notes_html_path}#{RESET}. Proceed?"
+    exit 1 if result == 'n'
+  end
+  puts OK
+
+  put "Preparing Hockey Package ... "
+  run "mkdir #{DIRECTORY}/Release/Hockey"
+  run "mkdir #{DIRECTORY}/Release/Hockey/#{BUNDLE}.dSYM"
+  run "cp #{DIRECTORY}/Release/Website/#{BUNDLE}.zip #{DIRECTORY}/Release/Hockey/#{BUNDLE}.app.zip"
+  run "cp #{DIRECTORY}/Release/Package/ReleaseNotes.md #{DIRECTORY}/Release/Hockey/"
+  run "cp -rf #{DIRECTORY}/Release/Package/*.dSYM #{DIRECTORY}/Release/Hockey/#{BUNDLE}.dSYM/"
+  run "cd #{DIRECTORY}/Release/Hockey/; zip --quiet --recurse-paths --symlinks #{BUNDLE}.dSYM.zip #{BUNDLE}.dSYM"
+  puts OK
+
+  put "Finalizing package ... "
+  origin = `pwd`.strip
+  run "cd #{DIRECTORY}/Release/Package; git init --quiet"
+  run "cd #{DIRECTORY}/Release/Package; git add --all"
+  run "cd #{DIRECTORY}/Release/Package; git commit --quiet --message 'Package #{VERSION}'"
+  puts OK
+
+  put "Finalizing website ... "
+  origin = `pwd`.strip
+  run "cd #{DIRECTORY}/Release/Website; git init --quiet"
+  run "cd #{DIRECTORY}/Release/Website; git add --all"
+  run "cd #{DIRECTORY}/Release/Website; git commit --quiet --message 'Release #{VERSION}'"
+  puts OK
+
+  if dry?
+    puts "Version is #{BOLD + VERSION + RESET}, stopping here (#{YELLOW}dry run#{RESET})"
+    exit 0
+  end
+
+  unless dry?
+    answer = ask "Prepared release, please review #{WHITE_BRIGHT}#{DIRECTORY}/Release#{RESET}. Ready to proceed?"
+    exit 1 if answer == 'n'
+  end
+
+  puts "#{YELLOW}Can't proceed, further release process not implemented yet.#{RESET}"
+  # TODO: implement.
+end
+
+desc "update all externals"
+task :update do
+  put "Nothing to update ... "
+  puts OK
+end
+
+desc "create a build directory"
+task :prepare do
+  run "mkdir -p #{DIRECTORY}"
+end
+
+desc "delete the build directory"
+task :clean do
+  put "Cleaning ... "
+  run "rm -rf #{DIRECTORY}"
+  puts OK
+end
+
+# ------------------------------------------------------------- Functions ------
+
+def assert(condition, message = "")
+  unless condition
+    puts message
+    exit 1
+  end
+end
+
+def check(condition)
+  unless condition
+    puts FAILED
+    exit 1
+  end
+end
+
+def run(command, options = {})
+  success = system command
+  check success unless options[:survive]
+  success
+end
+
+def put(string)
+  print string
+  STDOUT.flush
+end
+
+def ask(message)
+  put message + " [#{BOLD}y#{RESET}/#{BOLD}n#{RESET}] "
+  STDOUT.flush
+  answer = STDIN.gets.chomp
+  sleep 0.25
+  if answer == 'y' || answer == 'n' then answer else ask message end
+end
+
+def invoke(task)
+  Rake::Task[task].invoke
+end
+
+def load(file_path)
+  File.open(file_path, "r") { |file| file.read }
+end
+
+def save(file_path, content)
+  File.open(file_path, "w") { |file| file.write content }
+end
+
+def push(source, destination)
+  run "rsync --archive --delete --quiet #{source} #{destination}"
+end
+
+def replace(string, replacements_by_pattern)
+  result = "" + string
+  replacements_by_pattern.each do |pattern, replacement|
+    result.gsub! pattern, replacement
+  end
+  result
+end
+
+def tool?(name)
+  system "which -s #{name}"
+end
+
+def gem?(name)
+  `gem list #{name}`.strip.length > 0
+end
+
+def dirty?
+  `git status --porcelain`.length > 0
+end
+
+def dry?
+  VERSION.match /^(0\.0\.0)(\D.*)?/
+end
+
+def connected?
+  system "ping -c 1 -q -o google.com > /dev/null"
+end
+
+def simulators
+  run "ios-sim showdevicetypes > #{DIRECTORY}/ios-sim-device-types.txt", :survive => true
+  simulators = []
+  load("#{DIRECTORY}/ios-sim-device-types.txt").strip.each_line do |line|
+    simulators << line.strip.split(",").first.split(".").last
+  end
+  simulators
+end
+
+def devices
+  profile = `system_profiler SPUSBDataType`.strip
+  iphone_ids = profile.scan(/iPhone\:\n\n(?:.+\n)+.*Serial Number\: (\w+)/).flatten
+  ipad_ids = profile.scan(/iPad\:\n\n(?:.+\n)+.*Serial Number\: (\w+)/).flatten
+  all_ids = iphone_ids + ipad_ids
+  all_ids_by_name = {}
+  all_ids.each do |id|
+    result = `ios-deploy --detect --id #{id}`.strip.gsub "\n", " "
+    name = result.scan(/Found Unknown Device '(.*)' \(#{id}\)/).flatten.first
+    all_ids_by_name[name] = id
+  end
+  all_ids_by_name
+end

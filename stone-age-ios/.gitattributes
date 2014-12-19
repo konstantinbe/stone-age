@@ -1,0 +1,3 @@
+*.xib -whitespace
+*.nib -whitespace
+*.pdf -whitespace
