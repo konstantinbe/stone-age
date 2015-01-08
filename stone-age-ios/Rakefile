@@ -83,7 +83,7 @@ TAG_SPACED = TAG_DASHED.split("-").each { |s| s.capitalize! }.join(" ")
 TAG_CAMEL = TAG_DASHED.split("-").each { |s| s.capitalize! }.join("")
 
 NAME_CAMEL = NAME.gsub /\s*/, ""
-NAME_DASHED = NAME_CAMEL.downcase # TODO: implement camel to dashed.
+NAME_DASHED = NAME_CAMEL.gsub(/([a-z0-9])([A-Z])/, '\1-\2').downcase
 NAME_AND_TAG_DASHED = if TAG_GIVEN then "#{NAME_DASHED}-#{TAG_DASHED}" else NAME_DASHED end
 NAME_AND_TAG_CAMEL = NAME_CAMEL + TAG_CAMEL
 
