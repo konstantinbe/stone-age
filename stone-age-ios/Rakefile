@@ -524,8 +524,9 @@ def devices
   all_ids_by_name = {}
   all_ids.each do |id|
     result = `ios-deploy --detect --id #{id}`.strip.gsub "\n", " "
-    name = result.scan(/Found Unknown Device '(.*)' \(#{id}\)/).flatten.first
-    all_ids_by_name[name] = id
+    name = result.scan(/Found .* '(.*)' \(#{id}\)/).flatten.first
+    puts "#{YELLOW}WARNING#{RESET}: Couldn't determine name for device with ID '#{id}' (skipping)" unless name
+    all_ids_by_name[name] = id if name
   end
   all_ids_by_name
 end
