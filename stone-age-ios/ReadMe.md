@@ -13,7 +13,14 @@ You'll need Mountain Lion 10.10 or a later version.
 * Install [ios-deploy](https://www.npmjs.org/package/ios-deploy) (*optional*)
 * Install [kramdown](http://kramdown.gettalong.org) (*optional*)
 * Clone repo
-* Build & run: `rake play`
+* Build & run (on simulator): `rake play`
+
+In order to run on an actual iOS device:
+
+* Replace `Assets/Development.mobileprovision` with your provisioning profile
+* Attach your device
+* Check if your device is recognized: `rake help`
+* Build & run (on device): `rake run`
 
 ## License
 
