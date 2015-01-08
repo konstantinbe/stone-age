@@ -67,6 +67,9 @@ FLAGS_TARGET = FLAGS_PROFILE if TARGET == "profile"
 FLAGS_TARGET = FLAGS_ANALYZE if TARGET == "analyze"
 FLAGS_TARGET = "" unless defined? FLAGS_TARGET
 
+PROVISIONING_PROFILE = "Assets/AppStore.mobileprovision" if TARGET == "release"
+PROVISIONING_PROFILE = "Assets/Development.mobileprovision" unless defined? PROVISIONING_PROFILE
+
 VERSION_PARTS = VERSION.match /(\d+)\.(\d+)\.(\d+)(:?-(\w+)\.(\d+))?/
 VERSION_MAJOR = VERSION_PARTS[1].to_s
 VERSION_MINOR = VERSION_PARTS[2].to_s
@@ -248,9 +251,12 @@ task 'build:app' => ['build:source'] do
   save "#{DIRECTORY}/#{BUNDLE}.app/InfoPlist.strings", info_plist_strings
   puts OK
 
+  put "Copying provisioning profile ... "
+  run "cp #{PROVISIONING_PROFILE} #{DIRECTORY}/#{BUNDLE}.app/embedded.mobileprovision"
+  puts OK
+
   put "Copying other assets ... "
   push "Assets/ResourceRules.plist", "#{DIRECTORY}/#{BUNDLE}.app/"
-  push "Assets/embedded.mobileprovision", "#{DIRECTORY}/#{BUNDLE}.app/"
   push "Assets/PkgInfo", "#{DIRECTORY}/#{BUNDLE}.app/"
   puts OK
 
@@ -284,7 +290,7 @@ task :run do
   ids_by_name = devices
   name = ids_by_name.keys.detect { |name| name.downcase.include? DEVICE.downcase }
   id = ids_by_name[name]
-  put "Installing app on #{BOLD + name + RESET} ... "
+  put "Installing on #{BOLD + name + RESET} ... "
   run "ios-deploy --id #{id} --bundle #{DIRECTORY}/Run/#{BUNDLE}.app > #{DIRECTORY}/Run/ios-deploy.log"
   puts OK
 end
