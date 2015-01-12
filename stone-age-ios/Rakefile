@@ -240,7 +240,6 @@ task 'build:app' => ['build:source'] do
 
   put "Copying other assets ... "
   push "Assets/ResourceRules.plist", "#{DIRECTORY}/#{BUNDLE}.app/"
-  push "Assets/PkgInfo", "#{DIRECTORY}/#{BUNDLE}.app/"
   puts OK
 
   put "Signing #{BOLD + IDENTITY + RESET} ... "
