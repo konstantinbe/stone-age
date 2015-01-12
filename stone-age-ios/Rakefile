@@ -171,17 +171,19 @@ task :build => ['build:source', 'build:app'] do
   # Nothing to do yet.
 end
 
-desc "build components"
-task 'build:components' do
-  components = `ls -1 Components`.split "\n"
-  components.each do |component|
-    header_files = FileList["Components/#{component}/*.h"]
-    source_files = FileList["Components/#{component}/*.m", "Components/#{component}/*.c"]
+desc "build source"
+task 'build:source' do
+  paths = `find Components -d 1`.split "\n"
+  paths << "Source"
 
-    run "mkdir -p #{DIRECTORY}/Components/#{component}"
-    run "rm -Rf #{DIRECTORY}/Components/#{component}/*.a"
+  paths.each do |path|
+    header_files = FileList["#{path}/*.h"]
+    source_files = FileList["#{path}/*.m", "Components/#{path}/*.c"]
 
-    put "Compiling #{component} ... "
+    run "mkdir -p #{DIRECTORY}/#{path}"
+    run "rm -Rf #{DIRECTORY}/#{path}/*.a"
+
+    put "Compiling #{path} ... "
     source_files.each do |source_file|
       source = source_file
       sources = [source_file] + header_files
@@ -191,25 +193,6 @@ task 'build:components' do
     end
     puts OK
   end
-end
-
-desc "build source"
-task 'build:source' => 'build:components' do
-  header_files = FileList["Source/*.h"]
-  source_files = FileList["Source/*.m"]
-
-  run "mkdir -p #{DIRECTORY}/Source"
-  run "rm -Rf #{DIRECTORY}/Source/*.a"
-
-  put "Compiling source ... "
-  source_files.each do |source_file|
-    source = source_file
-    sources = [source_file] + header_files
-    destination = "#{DIRECTORY}/" + source_file.gsub('.m', '')
-    run "xcrun --sdk #{SDK_iOS} clang #{FLAGS} #{FLAGS_iOS} #{FLAGS_TARGET} -c -o #{destination}@iOS.o #{source}" unless uptodate? "#{destination}@iOS.o", sources
-    run "xcrun --sdk #{SDK_SIM} clang #{FLAGS} #{FLAGS_SIM} #{FLAGS_TARGET} -c -o #{destination}@SIM.o #{source}" unless uptodate? "#{destination}@SIM.o", sources
-  end
-  puts OK
 end
 
 desc "build app"
