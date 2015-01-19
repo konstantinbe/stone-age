@@ -290,7 +290,7 @@ desc "release a version"
 task :release do
   assert (not dirty?) || dry?, "#{RED}Error#{RESET}: repo is #{BOLD}dirty#{RESET} (only a dry-run possible)"
   assert gem?('kramdown'), "#{RED}Error#{RESET}: gem #{BOLD + 'cramdown' + RESET} is not available (required for rendering release notes)"
-  assert connected? || dry?, "#{RED}Error#{RESET}: no internet #{BOLD}connection#{RESET} (only a dry run possible)"
+  assert online? || dry?, "#{RED}Error#{RESET}: no internet #{BOLD}connection#{RESET} (only a dry run possible)"
 
   require 'kramdown'
 
@@ -491,7 +491,7 @@ def dry?
   VERSION.match /^(0\.0\.0)(\D.*)?/
 end
 
-def connected?
+def online?
   system "ping -c 1 -q -o google.com > /dev/null"
 end
 
