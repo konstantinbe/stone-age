@@ -1,3 +1,9 @@
+# This project is no longer maintained
+
+It was fun getting this to work, but in practice Xcode is the way to go. There are however bits and pieces of interest if you want to script certain aspects that otherwise require "manual clicking" in Xcode.
+
+---
+
 # Stone Age
 
 *Build iOS and Mac apps caveman style*
